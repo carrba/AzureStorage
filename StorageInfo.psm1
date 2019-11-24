@@ -1,34 +1,109 @@
-﻿# $sa = Get-AzStorageAccount
-
-# Upload a file to blob
-# Set-AzStorageBlobContent -file ..\..\Athletics\IMG_3579.MOV -Container $con1.name -Blob IMG_3579.MOV -Context $sa[1].Context 
-
-function get-storageAccount {
+﻿function get-StorageInfo {
+    [CmdletBinding()]
+    <#
+    .SYNOPSIS
+      Returns Storage Container Info from Azure Storage Accounts
+    .EXAMPLE
+      get-StorageInfo -region "ukwest" -kind "StorageV2" -Accesstier "Hot"
+      get-StorageInfo -kind "Storage"
+    .DESCRIPTION
+      Azure Storage Info tool to return container storage usage from storage accounts.
+      This module requires the Azure AZ module to be installed
+    .PARAMETER region
+      Limits the search to the specific Azure region, E.g. ukwest, westus2 etc. The Azure cmdlet, 
+      Get-AzLocation lists available locations
+    .PARAMETER kind
+      Limits the search to Storage accounts of the type specified
+    .PARAMETER Accesstier
+      Limits the search to access tier of hot or cold
+    .NOTES
+      https://github.com/carrba/AzureStorage
+#>
     param (
-        [string]$region,
+        $region = $null,
         [Parameter()]
-        [ValidateSet('StorageV2','Storage','BlobStorage','BlockBlobStorage','FileStorage')][string]$Kind,
+        [ValidateSet('StorageV2','Storage','BlobStorage','BlockBlobStorage','FileStorage')]
+        [AllowNull()]
+        $Kind = $Null,
         [Parameter()]
-        [ValidateSet('hot','cold')][string]$AccessTier,
+        [ValidateSet('hot','cold')]
+        [AllowNull()]
+        $AccessTier = $Null,
         [switch]$MB,
         [switch]$GB
     )
-    $storageAccounts = Get-AzStorageAccount 
-    if ($region){
-        $StorageAccounts = $StorageAccounts | Where-Object location -eq $region
-    }
-    if ($kind){
-        $StorageAccounts = $StorageAccounts | Where-Object kind -eq $kind
-    }
-    if ($AccessTier){
-        $StorageAccounts = $StorageAccounts | Where-Object AccessTier -eq $AccessTier
-    }
-    foreach ($StorageAccount in $StorageAccounts){
-        get-StorageAccountUsage -StorageContext $StorageAccount.Context -MB:$MB -GB:$GB
+    # Check for Az.Storage module
+    if (get-azmodule) { 
+        # Check/connect to AZure account
+        connect-az
+
+        # Create hastable to pass to function Get-StroageAccounts
+        $ht = @{}
+        # Set variables to $Null where -eq ""
+        if ($region -eq ""){$region = $Null}
+        if ($kind -eq ""){$kind = $null}
+        if ($Accesstier -eq ""){$kind = $null}
+        $ht = @{"region" = $region;
+                "kind" = $Kind;
+                "Accesstier" = $AccessTier
+            }
+
+        # Get a list of Storage Accounts to query
+        $SA = Get-StorageAccount -ht $ht
+        
+        # Run Get-storageAccountUsage against filtered StorageAccounts
+        get-storageAccountUsage -StorageAccount $SA -MB:$MB -GB:$GB
+    } 
+    else {
+        Write-Warning "AZ.Storage module is required. Please install PowerShell AZ module (install-module az)"
     }
 }
 
-function get-StorageAccountUsage{
+function get-StorageAccount {
+    [CmdletBinding()]
+    <#
+    .SYNOPSIS
+      Returns Storage Accounts of the current subscription
+    .EXAMPLE
+      get-StorageAccount
+      get-storageaccount -ht @{"regions" = "westeurope"; "kind" = "StorageV2"; "AccessTier" = "hot"}
+      get-storageaccount -ht @{"regions" = "ukwest"; "kind"}
+    .DESCRIPTION
+      Returns Storage Accounts from the current subscription. A hashtable can be supplied as a parameter to filter the result. 
+      The avaialabe hash table keys are regions, kind and accesstier.
+    .PARAMETER HT
+      Filter results by supplying a hashtable with these optininal keys: Regions, kind and/or accesstier 
+    .NOTES
+      https://github.com/carrba/AzureStorage
+    #>
+    param (
+        [hashtable]$ht
+    )
+    $storageAccounts = Get-AzStorageAccount
+    if ($null -ne $ht.region){
+        $StorageAccounts = $StorageAccounts | Where-Object location -eq $ht.region
+    }
+    if ($null -ne $ht.kind){
+        $StorageAccounts = $StorageAccounts | Where-Object kind -eq $ht.kind
+    }
+    if ($null -ne $ht.AccessTier){
+        $StorageAccounts = $StorageAccounts | Where-Object AccessTier -eq $ht.AccessTier
+    }
+    $StorageAccounts
+}
+
+function get-storageAccountUsage {
+    param (
+        $StorageAccount,
+        [switch]$MB,
+        [switch]$GB
+    )
+    foreach ($SA in $StorageAccount){
+        get-SAUsage -StorageContext $SA.Context -MB:$MB -GB:$GB
+    }
+}
+
+function get-SAUsage{
     param (
         [Microsoft.WindowsAzure.Commands.Common.Storage.AzureStorageContext]$StorageContext,
         [switch]$MB,
@@ -50,7 +125,6 @@ function get-container {
     )
     Get-AzStorageContainer -Context $StorageContext.Context
 }
-
 
 function get-containerfile {
     param (
@@ -119,4 +193,22 @@ function get-storageAccountCost {
 
     $myObj = New-Object -TypeName PSObject -Property $props
     $myObj
+}
+
+function get-azmodule {
+    $mod = get-module -ListAvailable | where-object name -eq "AZ.Storage"
+    if ($mod){
+        $true
+    }
+    else {
+        $false
+    }
+}
+function connect-az {
+    try {
+        Get-AzSubscription -ErrorAction stop | Out-Null
+    }
+    catch {
+        Connect-AzAccount
+    }
 }
