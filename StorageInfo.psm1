@@ -16,6 +16,10 @@
       Limits the search to Storage accounts of the type specified
     .PARAMETER Accesstier
       Limits the search to access tier of hot or cold
+    .PARAMETER MB
+      Switch to display aggregate container data value in megabytes.
+    .PARAMETER GB
+      Switch to display aggregate container data value in gigabytes.
     .NOTES
       https://github.com/carrba/AzureStorage
 #>
