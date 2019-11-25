@@ -114,11 +114,15 @@ function get-SAUsage{
         [switch]$GB
     )
     $containers = get-container -StorageContext $StorageContext
-    $StorageAccountCost = get-storageAccountCost -StorageAccountName $StorageContext.StorageAccountName
-    $Title = "Storage Account : " + $StorageAccountCost.StorageAccountName
-    write-host $title
-    $Cost = "Cost in current billing period : £" + $StorageAccountCost.BillingCost
-    write-host $Cost
+    if ($containers){
+        # Print Storage Account name and Billing
+        $StorageAccountCost = get-storageAccountCost -StorageAccountName $StorageContext.StorageAccountName
+
+        $Title = "Storage Account : " + $StorageAccountCost.StorageAccountName
+        write-host $title
+        $Cost = "Cost in current billing period : £" + $StorageAccountCost.BillingCost
+        write-host $Cost
+    }
     foreach ($container in $containers) {
         get-containerfile -StorageContext $StorageContext.Context -Container $container -MB:$MB -GB:$GB
     }
